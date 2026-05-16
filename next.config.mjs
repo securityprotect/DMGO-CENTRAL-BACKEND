@@ -1,4 +1,5 @@
 import { imageHosts } from './image-hosts.config.mjs';
+import path from 'node:path';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -87,6 +88,11 @@ const nextConfig = {
       dev: dev
     }
   ) {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(process.cwd(), 'src'),
+    };
+
     config.module.rules.push({
       test: /\.(jsx|tsx)$/,
       exclude: [/node_modules/],
