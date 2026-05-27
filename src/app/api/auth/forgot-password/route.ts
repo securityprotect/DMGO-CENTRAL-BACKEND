@@ -20,7 +20,22 @@ export async function POST(req: Request) {
 
   if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 });
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (error) {
+    console.error('[auth:forgot-password] database connection failed', error);
+    if (isJson) {
+      return NextResponse.json(
+        { error: 'Database connection failed. Please check MongoDB credentials and try again.' },
+        { status: 503 }
+      );
+    }
+    return NextResponse.redirect(
+      new URL(`/sign-up-login-screen?view=forgot&email=${encodeURIComponent(email)}&error=db_unavailable`, origin),
+      { status: 303 }
+    );
+  }
+
   const user = await User.findOne({ email });
   if (!user) {
     if (isJson) {

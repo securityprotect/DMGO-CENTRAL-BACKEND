@@ -35,7 +35,22 @@ export async function POST(req: Request) {
     );
   }
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (error) {
+    console.error('[auth:reset-password] database connection failed', error);
+    if (isJson) {
+      return NextResponse.json(
+        { error: 'Database connection failed. Please check MongoDB credentials and try again.' },
+        { status: 503 }
+      );
+    }
+    return NextResponse.redirect(
+      new URL(`/sign-up-login-screen?view=forgot&sent=1&email=${encodeURIComponent(email)}&stage=verified&error=db_unavailable`, origin),
+      { status: 303 }
+    );
+  }
+
   const pending = await AuthOtp.findOne({ email, purpose: 'forgot-password' });
   if (!pending) {
     if (isJson) return NextResponse.json({ error: 'No OTP request found. Please request a new code.' }, { status: 400 });
