@@ -7,13 +7,10 @@ const adminAuditLogSchema = new Schema(
     action: { type: String, required: true },
     targetType: { type: String, required: true },
     targetId: { type: String, required: true },
-<<<<<<< HEAD
     role: { type: String, default: 'admin' },
     beforeState: { type: Schema.Types.Mixed, default: null },
     afterState: { type: Schema.Types.Mixed, default: null },
     ipAddress: { type: String, default: '' },
-=======
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     metadata: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

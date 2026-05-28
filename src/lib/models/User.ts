@@ -4,7 +4,6 @@ const userSchema = new Schema(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
-<<<<<<< HEAD
     phone: { type: String, default: '' },
     country: { type: String, default: '' },
     timezone: { type: String, default: '' },
@@ -22,21 +21,12 @@ const userSchema = new Schema(
     totalSpend: { type: Number, default: 0 },
     lifetimeValue: { type: Number, default: 0 },
     signupIpAddress: { type: String, default: '' },
-=======
-    passwordHash: { type: String, required: true },
-    plan: { type: String, default: 'starter' },
-    role: { type: String, enum: ['creator', 'agency', 'admin'], default: 'creator', index: true },
-    status: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active', index: true },
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     resetPasswordTokenHash: { type: String, default: '' },
     resetPasswordExpiresAt: { type: Date, default: null },
     lastLoginAt: { type: Date, default: null },
     lastLoginIp: { type: String, default: '' },
-<<<<<<< HEAD
     lastDevice: { type: String, default: '' },
     lastActivityAt: { type: Date, default: null },
-=======
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     loginFailures24h: { type: Number, default: 0 },
   },
   { timestamps: true }

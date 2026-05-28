@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin, logAdminAction } from '@/lib/admin/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Activity } from '@/lib/models/Activity';
-<<<<<<< HEAD
 import { safeQueueJob } from '@/lib/ops/logging';
-=======
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
 
 export async function POST(req: Request) {
   const auth = await requireAdmin();
@@ -21,7 +18,7 @@ export async function POST(req: Request) {
   activity.retries = Number(activity.retries || 0) + 1;
   activity.failReason = '';
   await activity.save();
-<<<<<<< HEAD
+
   await safeQueueJob({
     queueName: 'dm-replay',
     userId: activity.userId,
@@ -30,8 +27,6 @@ export async function POST(req: Request) {
     retryCount: Number(activity.retries || 0),
     payload: { activityId },
   });
-=======
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
 
   await logAdminAction({
     actorUserId: String((auth.user as any)._id),
@@ -43,7 +38,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true });
 }
-<<<<<<< HEAD
-=======
-
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b

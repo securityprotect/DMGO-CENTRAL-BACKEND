@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/lib/models/User';
-import { setAuthCookie, setProfileCookie, signAuthToken } from '@/lib/auth/session';
-<<<<<<< HEAD
 import { LoginSession } from '@/lib/models/LoginSession';
+import { setAuthCookie, setProfileCookie, signAuthToken } from '@/lib/auth/session';
 import { safeErrorLog } from '@/lib/ops/logging';
-=======
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
 
 export async function POST(req: Request) {
   const contentType = req.headers.get('content-type') || '';
@@ -50,7 +47,6 @@ export async function POST(req: Request) {
   if (!ok) {
     user.loginFailures24h = Number(user.loginFailures24h || 0) + 1;
     await user.save();
-<<<<<<< HEAD
     await safeErrorLog({
       severity: user.loginFailures24h > 5 ? 'high' : 'low',
       module: 'auth',
@@ -58,8 +54,6 @@ export async function POST(req: Request) {
       errorType: 'LoginFailure',
       errorMessage: 'Invalid credentials',
     });
-=======
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     if (isJson) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
@@ -68,7 +62,6 @@ export async function POST(req: Request) {
 
   user.lastLoginAt = new Date();
   user.lastLoginIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '';
-<<<<<<< HEAD
   user.lastDevice = req.headers.get('user-agent') || '';
   user.lastActivityAt = new Date();
   user.loginFailures24h = 0;
@@ -82,10 +75,6 @@ export async function POST(req: Request) {
     active: true,
     lastSeenAt: new Date(),
   }).catch((error) => console.error('[LOGIN_SESSION] create failed', error));
-=======
-  user.loginFailures24h = 0;
-  await user.save();
->>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
 
   const token = signAuthToken(String(user._id), { name: user.name, email: user.email, plan: user.plan });
   const safeNextPath = nextPath.startsWith('/') ? nextPath : '/dashboard';
