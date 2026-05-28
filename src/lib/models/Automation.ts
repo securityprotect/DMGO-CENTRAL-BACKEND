@@ -12,6 +12,7 @@ const automationSchema = new Schema(
     replyTemplate: { type: String, required: true },
     replyMode: { type: String, enum: ['comment_and_dm', 'dm_only'], default: 'comment_and_dm' },
     keywords: [{ type: String, required: true }],
+<<<<<<< HEAD
     automationType: { type: String, default: 'keyword_dm' },
     queueStatus: {
       type: String,
@@ -19,15 +20,20 @@ const automationSchema = new Schema(
       default: 'pending',
       index: true,
     },
+=======
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     cooldownHours: { type: Number, default: 24 },
     delaySeconds: { type: Number, default: 5 },
     sendDm: { type: Boolean, default: true },
     status: { type: String, enum: ['active', 'paused', 'draft'], default: 'active' },
     dmsSent: { type: Number, default: 0 },
     successRate: { type: Number, default: 100 },
+<<<<<<< HEAD
     totalExecutions: { type: Number, default: 0 },
     failedExecutions: { type: Number, default: 0 },
     lastError: { type: String, default: '' },
+=======
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     lastFired: { type: Date, default: null },
   },
   { timestamps: true }

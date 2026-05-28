@@ -9,7 +9,10 @@ const activitySchema = new Schema(
     automation: { type: String, required: true },
     keyword: { type: String, required: true },
     dmPreview: { type: String, required: true },
+<<<<<<< HEAD
     eventType: { type: String, default: 'dm_send' },
+=======
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
     status: {
       type: String,
       enum: ['sent', 'failed', 'queued', 'rate-limited'],
@@ -17,9 +20,12 @@ const activitySchema = new Schema(
     },
     retries: { type: Number, default: 0 },
     failReason: { type: String, default: '' },
+<<<<<<< HEAD
     rawPayload: { type: Schema.Types.Mixed, default: {} },
     responsePayload: { type: Schema.Types.Mixed, default: {} },
     durationMs: { type: Number, default: 0 },
+=======
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
   },
   { timestamps: true }
 );

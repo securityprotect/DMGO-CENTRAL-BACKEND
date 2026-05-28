@@ -122,6 +122,7 @@ export async function POST(req: Request) {
 
   for (const entry of entries) {
     const igUserId = String(entry?.id || '');
+    const firstMediaId = String(entry?.changes?.[0]?.value?.media?.id || '');
     if (!igUserId) {
       console.log('[IG_WEBHOOK] skip: missing entry.id');
       continue;
@@ -130,6 +131,35 @@ export async function POST(req: Request) {
     let account = await InstagramAccount.findOne({
       $or: [{ igUserId }, { webhookUserId: igUserId }],
     }).lean();
+
+    if (!account && firstMediaId) {
+      const automationCandidates = await Automation.find({
+        status: 'active',
+        $or: [{ reelId: firstMediaId }, { reelId: '' }],
+      }).lean();
+
+      if (automationCandidates.length > 0) {
+        const targetHandles = new Set(
+          automationCandidates
+            .map((automation: any) => normalizeInstagramHandle(automation.account))
+            .filter(Boolean)
+        );
+        const allAccounts = await InstagramAccount.find({}).lean();
+        const matchedAccount = allAccounts.find((candidate) =>
+          targetHandles.has(normalizeInstagramHandle(candidate.username))
+        );
+        if (matchedAccount) {
+          account = matchedAccount;
+          console.log(
+            '[IG_WEBHOOK] fallback-linked account via automation handle:',
+            matchedAccount.username,
+            'for webhook igUserId=',
+            igUserId
+          );
+        }
+      }
+    }
+
     if (!account) {
       const totalAccounts = await InstagramAccount.countDocuments({});
       if (totalAccounts === 1) {
@@ -141,6 +171,7 @@ export async function POST(req: Request) {
         }
       }
     }
+
     if (!account) {
       console.log('[IG_WEBHOOK] skip: strict account match failed for webhook igUserId=', igUserId);
       continue;
@@ -150,17 +181,21 @@ export async function POST(req: Request) {
 
     for (const change of entry?.changes || []) {
       if (change?.field !== 'comments' && change?.field !== 'live_comments') continue;
+
       const value = change.value || {};
       const commentId = String(value.id || '');
       const mediaId = String(value.media?.id || '');
       const commenterId = String(value.from?.id || '');
       const commenterUsername = String(value.from?.username || 'unknown_user');
       const commentText = String(value.text || '').trim();
+
       if (!commentText || !commentId) {
         console.log('[IG_WEBHOOK] skip: empty commentText/commentId');
         continue;
       }
+
       console.log('[IG_WEBHOOK] comment:', { igUserId, mediaId, commentId, commenterId, commenterUsername, commentText });
+
       if (commenterId === String(account.webhookUserId || account.igUserId)) {
         console.log('[IG_WEBHOOK] skip: self comment/reply');
         continue;
@@ -171,6 +206,7 @@ export async function POST(req: Request) {
         status: 'active',
         $or: [{ reelId: mediaId }, { reelId: '' }],
       }).lean();
+
       const activeAutomations = automationCandidates.filter((automation: any) => {
         const automationHandle = normalizeInstagramHandle(automation.account);
         return automationHandle === connectedHandle;

@@ -54,6 +54,7 @@ export async function exchangeCodeForToken(code: string) {
 export async function fetchInstagramProfile(accessToken: string) {
   const params = new URLSearchParams({
     fields: 'id,username,account_type',
+<<<<<<< HEAD
   });
   const res = await fetch(`https://graph.instagram.com/me?${params.toString()}`, {
     headers: {
@@ -61,6 +62,11 @@ export async function fetchInstagramProfile(accessToken: string) {
       Accept: 'application/json',
     },
   });
+=======
+    access_token: accessToken,
+  });
+  const res = await fetch(`https://graph.instagram.com/me?${params.toString()}`);
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || 'Profile fetch failed');
   return data;
@@ -69,12 +75,22 @@ export async function fetchInstagramProfile(accessToken: string) {
 export async function subscribeInstagramAccountToWebhooks(igUserId: string, accessToken: string) {
   const graphVersion = process.env.META_GRAPH_VERSION || 'v20.0';
   const params = new URLSearchParams({
+<<<<<<< HEAD
     subscribed_fields: 'comments,live_comments',
     access_token: accessToken,
   });
   const res = await fetch(`https://graph.instagram.com/${graphVersion}/${igUserId}/subscribed_apps?${params.toString()}`, {
     method: 'POST',
     headers: { Accept: 'application/json' },
+=======
+    subscribed_fields: 'comments,messages,message_reactions,message_postbacks',
+    access_token: accessToken,
+  });
+  const res = await fetch(`https://graph.facebook.com/${graphVersion}/${igUserId}/subscribed_apps`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error?.message || 'Failed to subscribe IG account to webhooks');

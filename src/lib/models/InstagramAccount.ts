@@ -7,6 +7,7 @@ const instagramAccountSchema = new Schema(
     webhookUserId: { type: String, default: '', index: true },
     username: { type: String, required: true },
     accountType: { type: String, default: 'PROFESSIONAL' },
+<<<<<<< HEAD
     businessAccountStatus: { type: String, default: 'unknown' },
     profilePictureUrl: { type: String, default: '' },
     accessToken: { type: String, required: true },
@@ -27,6 +28,11 @@ const instagramAccountSchema = new Schema(
     dmsSentToday: { type: Number, default: 0 },
     dailyLimit: { type: Number, default: 250 },
     apiErrorCount: { type: Number, default: 0 },
+=======
+    profilePictureUrl: { type: String, default: '' },
+    accessToken: { type: String, required: true },
+    tokenExpiresAt: { type: Date, default: null },
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
   },
   { timestamps: true }
 );

@@ -9,6 +9,7 @@ const billingRecordSchema = new Schema(
     type: { type: String, enum: ['invoice', 'refund', 'credit'], default: 'invoice' },
     description: { type: String, default: '' },
     providerRef: { type: String, default: '' },
+<<<<<<< HEAD
     gateway: { type: String, default: 'razorpay' },
     transactionId: { type: String, default: '' },
     invoiceUrl: { type: String, default: '' },
@@ -16,6 +17,8 @@ const billingRecordSchema = new Schema(
     paidAt: { type: Date, default: null },
     renewalDate: { type: Date, default: null },
     refundStatus: { type: String, default: '' },
+=======
+>>>>>>> d49aea3092a26efb667c36b33d3531391f2a244b
   },
   { timestamps: true }
 );
