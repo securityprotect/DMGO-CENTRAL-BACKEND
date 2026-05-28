@@ -1,0 +1,17 @@
+
+> dmgo-central-backend@0.1.0 dev
+> next dev -p 4030
+
+   ▲ Next.js 15.1.11
+   - Local:        http://localhost:4030
+   - Network:      http://192.168.1.47:4030
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 5.8s
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 630ms (98 modules)
+ ○ Compiling /api/auth/me ...
+ ✓ Compiled /api/auth/me in 2.7s (425 modules)
+ GET /api/auth/me 200 in 6646ms
+ GET /api/auth/me 200 in 35ms
