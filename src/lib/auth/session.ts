@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { headers } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/lib/models/User';
@@ -59,6 +60,21 @@ export function signAuthToken(userId: string, profile?: AuthTokenProfile) {
 }
 
 export async function getAuthedUser() {
+  const headerStore = await headers();
+  const bearer = String(headerStore.get('authorization') || '').trim();
+  if (bearer.toLowerCase().startsWith('bearer ')) {
+    const token = bearer.slice(7).trim();
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('JWT_SECRET is not set');
+    try {
+      const decoded = jwt.verify(token, secret) as { sub: string };
+      await connectToDatabase();
+      return User.findById(decoded.sub).lean();
+    } catch {
+      // fall back to cookie auth below
+    }
+  }
+
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) {

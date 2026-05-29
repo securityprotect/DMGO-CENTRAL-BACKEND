@@ -48,6 +48,7 @@
         "start:web": "next start -p 4030",
         "worker:instagram": "tsx src/workers/instagram-worker.ts",
         "backfill:instagram": "tsx src/scripts/backfill-instagram-mapping.ts",
+        "seed:super-admin": "tsx src/scripts/seed-super-admin.ts",
         "lint": "next lint",
         "lint:fix": "next lint --fix",
         "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",

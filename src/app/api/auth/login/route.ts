@@ -79,7 +79,10 @@ export async function POST(req: Request) {
   const token = signAuthToken(String(user._id), { name: user.name, email: user.email, plan: user.plan });
   const safeNextPath = nextPath.startsWith('/') ? nextPath : '/dashboard';
   const res = isJson
-    ? NextResponse.json({ user: { id: String(user._id), name: user.name, email: user.email, plan: user.plan } })
+    ? NextResponse.json({
+        user: { id: String(user._id), name: user.name, email: user.email, plan: user.plan },
+        token,
+      })
     : NextResponse.redirect(new URL(safeNextPath, origin), { status: 303 });
   res.cookies.set(setAuthCookie(token));
   res.cookies.set(setProfileCookie({ name: user.name, email: user.email, plan: user.plan }));
