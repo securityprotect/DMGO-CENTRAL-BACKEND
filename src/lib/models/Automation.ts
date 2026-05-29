@@ -5,6 +5,7 @@ const automationSchema = new Schema(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     name: { type: String, required: true },
     account: { type: String, required: true },
+    instagramAccountId: { type: String, default: '', index: true },
     reelUrl: { type: String, required: true },
     reelId: { type: String, default: '' },
     reelCaption: { type: String, default: '' },

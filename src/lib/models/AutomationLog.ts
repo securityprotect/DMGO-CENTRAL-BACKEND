@@ -4,6 +4,9 @@ const automationLogSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     automationId: { type: Schema.Types.ObjectId, ref: 'Automation', required: true, index: true },
+    instagramAccountId: { type: String, default: '', index: true },
+    webhookEventId: { type: String, default: '', index: true },
+    traceId: { type: String, default: '', index: true },
     eventType: { type: String, default: 'automation_execution' },
     status: { type: String, enum: ['success', 'failed', 'queued', 'skipped'], default: 'queued', index: true },
     triggerKeyword: { type: String, default: '' },

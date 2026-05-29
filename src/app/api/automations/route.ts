@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthedUser } from '@/lib/auth/session';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Automation } from '@/lib/models/Automation';
+import { InstagramAccount } from '@/lib/models/InstagramAccount';
 
 export async function GET() {
   const user = await getAuthedUser();
@@ -15,6 +16,7 @@ export async function GET() {
       id: String(a._id),
       name: a.name,
       account: a.account,
+      instagramAccountId: a.instagramAccountId || '',
       reelUrl: a.reelUrl || '',
       reelId: a.reelId || '',
       reelCaption: a.reelCaption || '',
@@ -40,10 +42,26 @@ export async function POST(req: Request) {
   const body = await req.json();
   await connectToDatabase();
 
+  const selectedAccountId = String(body.instagramAccountId || '').trim();
+  let account = null;
+  if (selectedAccountId) {
+    account = await InstagramAccount.findOne({ _id: selectedAccountId, userId: user._id }).lean();
+    if (!account) {
+      return NextResponse.json({ error: 'Selected Instagram account not found' }, { status: 404 });
+    }
+  } else if (body.account) {
+    const normalizedAccount = String(body.account).trim().toLowerCase();
+    account = await InstagramAccount.findOne({
+      userId: user._id,
+      $or: [{ username: normalizedAccount }, { username: new RegExp(`^${normalizedAccount.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }],
+    }).lean();
+  }
+
   const created = await Automation.create({
     userId: user._id,
     name: body.name,
     account: body.account,
+    instagramAccountId: selectedAccountId || (account ? String(account._id) : ''),
     reelUrl: body.reelUrl,
     reelId: body.reelId || '',
     reelCaption: body.reelCaption || '',

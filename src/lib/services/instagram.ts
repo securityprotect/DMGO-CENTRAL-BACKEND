@@ -4,6 +4,10 @@ function env(name: string, fallback = '') {
   return (process.env[name] || fallback).trim();
 }
 
+function redirectUri() {
+  return (process.env.META_REDIRECT_URI || process.env.INSTAGRAM_REDIRECT_URI || '').trim();
+}
+
 export function buildInstagramState(userId: string) {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('JWT_SECRET missing');
@@ -23,7 +27,7 @@ export function getInstagramOAuthUrl(state: string) {
   );
   const params = new URLSearchParams({
     client_id: env('INSTAGRAM_APP_ID'),
-    redirect_uri: env('META_REDIRECT_URI'),
+    redirect_uri: redirectUri(),
     scope: scopes,
     response_type: 'code',
     state,
@@ -36,7 +40,7 @@ export async function exchangeCodeForToken(code: string) {
     client_id: env('INSTAGRAM_APP_ID'),
     client_secret: env('INSTAGRAM_APP_SECRET'),
     grant_type: 'authorization_code',
-    redirect_uri: env('META_REDIRECT_URI'),
+    redirect_uri: redirectUri(),
     code,
   });
 

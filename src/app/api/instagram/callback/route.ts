@@ -23,7 +23,6 @@ export async function GET(req: Request) {
     const { userId } = parseInstagramState(state);
     const tokenData = await exchangeCodeForToken(code);
     const accessToken = String(tokenData.access_token || '').trim();
-    const webhookUserId = String(tokenData.user_id || '');
     const profile = await fetchInstagramProfile(accessToken);
 
     await connectToDatabase();
@@ -33,11 +32,13 @@ export async function GET(req: Request) {
         $set: {
           userId,
           igUserId: String(profile.id),
-          webhookUserId,
+          webhookUserId: String(profile.id),
           username: profile.username,
           accountType: profile.account_type || 'PROFESSIONAL',
           accessToken,
           tokenExpiresAt: tokenData.expires_in ? new Date(Date.now() + Number(tokenData.expires_in) * 1000) : null,
+          webhookSubscriptionStatus: 'healthy',
+          reconnectRequired: false,
         },
       },
       { upsert: true, new: true }
