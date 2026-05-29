@@ -12,7 +12,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: 'INSTAGRAM_VERIFY_TOKEN env not set' }, { status: 500 });
   }
 
-  const origin = new URL(req.url).origin;
+  const headers = req.headers;
+  const forwardedHost = headers.get('x-forwarded-host');
+  const host = forwardedHost || headers.get('host') || new URL(req.url).host;
+  const forwardedProto = headers.get('x-forwarded-proto');
+  const proto = forwardedProto || (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
+  const origin = `${proto}://${host}`;
   const target = `${origin}/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verifyToken)}&hub.challenge=${encodeURIComponent(challenge)}`;
 
   const startedAt = Date.now();
