@@ -44,15 +44,24 @@ export async function GET(req: Request) {
       { upsert: true, new: true }
     );
 
+    let subscribeWarning: string | null = null;
     try {
       await subscribeInstagramAccountToWebhooks(String(profile.id), accessToken);
       console.log('[IG_CONNECT] subscribed to webhooks for igUserId=', String(profile.id));
     } catch (subscribeError) {
       const msg = subscribeError instanceof Error ? subscribeError.message : 'unknown subscribe error';
       console.log('[IG_CONNECT] webhook subscribe failed for igUserId=', String(profile.id), 'reason=', msg);
+      subscribeWarning = msg;
+      await InstagramAccount.updateOne(
+        { igUserId: String(profile.id) },
+        { $set: { webhookSubscriptionStatus: 'failed', reconnectRequired: true, lastSubscribeError: msg } }
+      );
     }
 
-    const res = NextResponse.redirect(`${webUrl}/dashboard?connected=1`);
+    const redirectUrl = subscribeWarning
+      ? `${webUrl}/dashboard?connected=1&webhook_warning=${encodeURIComponent(subscribeWarning)}`
+      : `${webUrl}/dashboard?connected=1`;
+    const res = NextResponse.redirect(redirectUrl);
     const token = signAuthToken(userId);
     res.cookies.set(setAuthCookie(token));
     return res;

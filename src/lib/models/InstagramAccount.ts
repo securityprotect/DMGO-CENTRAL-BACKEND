@@ -25,6 +25,8 @@ const instagramAccountSchema = new Schema(
     lastSyncAt: { type: Date, default: null },
     webhookStatus: { type: String, default: 'healthy' },
     reconnectRequired: { type: Boolean, default: false },
+    lastSubscribeError: { type: String, default: '' },
+    lastTokenRefreshAt: { type: Date, default: null },
     followersCount: { type: Number, default: 0 },
     followingCount: { type: Number, default: 0 },
     dmsSentToday: { type: Number, default: 0 },
