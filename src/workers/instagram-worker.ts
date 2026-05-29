@@ -1,71 +1,183 @@
-import { Worker } from 'bullmq';
-import { processInstagramWebhookEvent } from '@/lib/services/instagramAutomation';
-import { getRedisConnection, INSTAGRAM_WEBHOOK_QUEUE } from '@/lib/queue/instagram';
-import { createLogger } from '@/lib/observability/logger';
 import { connectToDatabase } from '@/lib/mongodb';
+import { QueueJob } from '@/lib/models/QueueJob';
 import { SystemHealthLog } from '@/lib/models/SystemHealthLog';
+import { createLogger } from '@/lib/observability/logger';
+import { processInstagramWebhookEvent } from '@/lib/services/instagramAutomation';
+import { INSTAGRAM_WEBHOOK_QUEUE } from '@/lib/queue/instagram';
 
 const logger = createLogger({ scope: 'instagram-worker' });
-const connection = getRedisConnection() as any;
+const workerId = `${process.pid}-${Date.now()}`;
+const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS || 2000);
+const heartbeatIntervalMs = Number(process.env.WORKER_HEARTBEAT_INTERVAL_MS || 30000);
+const maxConcurrentJobs = Math.max(1, Number(process.env.WEBHOOK_WORKER_CONCURRENCY || 1));
 
-if (!connection) {
-  logger.error('REDIS_URL is missing; worker cannot start');
-  process.exitCode = 1;
-} else {
-  const heartbeat = async () => {
-    try {
-      await connectToDatabase();
-      await SystemHealthLog.updateOne(
-        { serviceName: 'instagram-worker' },
-        {
-          $set: {
-            serviceName: 'instagram-worker',
-            status: 'healthy',
-            responseTimeMs: 0,
-            lastIncident: '',
-            uptimePercent: 99.9,
-          },
+let activeJobs = 0;
+let shuttingDown = false;
+
+async function writeHeartbeat(status: 'healthy' | 'degraded' | 'down' = 'healthy', lastIncident = '') {
+  try {
+    await connectToDatabase();
+    await SystemHealthLog.updateOne(
+      { serviceName: 'instagram-worker' },
+      {
+        $set: {
+          serviceName: 'instagram-worker',
+          status,
+          responseTimeMs: 0,
+          lastIncident,
+          uptimePercent: status === 'healthy' ? 99.9 : status === 'degraded' ? 92 : 75,
         },
-        { upsert: true }
-      );
-    } catch (error) {
-      logger.warn({ error }, 'worker heartbeat failed');
-    }
-  };
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    logger.warn({ error }, 'heartbeat write failed');
+  }
+}
 
-  void heartbeat();
-  const heartbeatTimer = setInterval(() => {
-    void heartbeat();
-  }, Number(process.env.WORKER_HEARTBEAT_INTERVAL_MS || 30000));
+function backoffMs(retryCount: number) {
+  const base = Number(process.env.WEBHOOK_JOB_BACKOFF_MS || 1000);
+  return Math.min(15 * 60 * 1000, base * Math.pow(2, Math.max(0, retryCount - 1)));
+}
 
-  const worker = new Worker(
-    INSTAGRAM_WEBHOOK_QUEUE,
-    async (job) => {
-      const { eventKey, traceId } = job.data as { eventKey: string; traceId: string };
-      logger.info({ eventKey, traceId, jobId: job.id }, 'processing webhook event');
-      return processInstagramWebhookEvent(eventKey, traceId, String(job.id || ''));
+async function claimNextJob() {
+  const now = new Date();
+  return QueueJob.findOneAndUpdate(
+    {
+      queueName: INSTAGRAM_WEBHOOK_QUEUE,
+      status: { $in: ['pending', 'retrying'] },
+      availableAt: { $lte: now },
     },
     {
-      connection: connection as any,
-      concurrency: Number(process.env.WEBHOOK_WORKER_CONCURRENCY || 5),
+      $set: {
+        status: 'processing',
+        startedAt: now,
+        lockedAt: now,
+        lockOwner: workerId,
+      },
+      $inc: { retryCount: 1 },
+    },
+    {
+      sort: { availableAt: 1, createdAt: 1 },
+      new: true,
     }
-  );
-
-  worker.on('completed', (job) => {
-    logger.info({ eventKey: job.data.eventKey, jobId: job.id }, 'job completed');
-  });
-
-  worker.on('failed', (job, err) => {
-    logger.error({ eventKey: job?.data?.eventKey, jobId: job?.id, err }, 'job failed');
-  });
-
-  const shutdown = async () => {
-    logger.info('shutting down worker');
-    clearInterval(heartbeatTimer);
-    await worker.close();
-    process.exit(0);
-  };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  ).lean();
 }
+
+async function processJob(job: any) {
+  const eventKey = String(job.jobKey || job.payload?.eventKey || '');
+  const traceId = String(job.payload?.traceId || '');
+  logger.info({ eventKey, traceId, jobId: String(job._id) }, 'processing job');
+
+  try {
+    const result = await processInstagramWebhookEvent(eventKey, traceId, String(job._id));
+    const terminalReason = String(result?.reason || '');
+    if (!result?.ok && terminalReason === 'not_claimed') {
+      await QueueJob.updateOne(
+        { _id: job._id, lockOwner: workerId },
+        {
+          $set: {
+            status: 'completed',
+            completedAt: new Date(),
+            processingTimeMs: Date.now() - new Date(job.startedAt || Date.now()).getTime(),
+            errorMessage: '',
+          },
+        }
+      );
+      logger.info({ eventKey, result }, 'job skipped because event was already claimed');
+      return;
+    }
+    if (!result?.ok && terminalReason) {
+      await QueueJob.updateOne(
+        { _id: job._id, lockOwner: workerId },
+        {
+          $set: {
+            status: 'failed',
+            completedAt: new Date(),
+            processingTimeMs: Date.now() - new Date(job.startedAt || Date.now()).getTime(),
+            errorMessage: terminalReason,
+          },
+        }
+      );
+      logger.warn({ eventKey, result }, 'job completed with terminal failure');
+      return;
+    }
+    await QueueJob.updateOne(
+      { _id: job._id, lockOwner: workerId },
+      {
+        $set: {
+          status: 'completed',
+          completedAt: new Date(),
+          processingTimeMs: Date.now() - new Date(job.startedAt || Date.now()).getTime(),
+          errorMessage: '',
+        },
+      }
+    );
+    logger.info({ eventKey, result }, 'job completed');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown job error';
+    const currentRetry = Number(job.retryCount || 0);
+    const shouldRetry = currentRetry < Number(job.maxAttempts || 5);
+    const nextStatus = shouldRetry ? 'retrying' : 'failed';
+    const nextAvailableAt = shouldRetry ? new Date(Date.now() + backoffMs(currentRetry)) : null;
+
+    await QueueJob.updateOne(
+      { _id: job._id, lockOwner: workerId },
+      {
+        $set: {
+          status: nextStatus,
+          completedAt: shouldRetry ? null : new Date(),
+          availableAt: nextAvailableAt || job.availableAt || new Date(),
+          errorMessage: message,
+        },
+      }
+    );
+
+    logger.error({ eventKey, error }, 'job failed');
+  }
+}
+
+async function pollLoop() {
+  if (shuttingDown) return;
+  if (activeJobs >= maxConcurrentJobs) return;
+
+  const job = await claimNextJob();
+  if (!job) return;
+
+  activeJobs += 1;
+  void processJob(job).finally(() => {
+    activeJobs -= 1;
+  });
+}
+
+async function bootstrap() {
+  await connectToDatabase();
+  logger.info({ workerId, queue: INSTAGRAM_WEBHOOK_QUEUE }, 'Mongo queue worker starting');
+  await writeHeartbeat('healthy');
+  void setInterval(() => {
+    void writeHeartbeat(activeJobs > 0 ? 'degraded' : 'healthy');
+  }, heartbeatIntervalMs);
+  setInterval(() => {
+    void pollLoop();
+  }, pollIntervalMs);
+  void pollLoop();
+}
+
+async function shutdown() {
+  shuttingDown = true;
+  logger.info('shutting down worker');
+  await writeHeartbeat('down', 'worker shutting down');
+  process.exit(0);
+}
+
+process.on('SIGINT', () => {
+  void shutdown();
+});
+process.on('SIGTERM', () => {
+  void shutdown();
+});
+
+void bootstrap().catch((error) => {
+  logger.error({ error }, 'worker bootstrap failed');
+  process.exitCode = 1;
+});

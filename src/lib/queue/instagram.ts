@@ -1,5 +1,6 @@
-import { Queue, QueueEvents } from 'bullmq';
-import IORedis from 'ioredis';
+import crypto from 'crypto';
+import { connectToDatabase } from '@/lib/mongodb';
+import { QueueJob } from '@/lib/models/QueueJob';
 
 export const INSTAGRAM_WEBHOOK_QUEUE = 'instagram-webhook-events';
 
@@ -8,66 +9,37 @@ type InstagramWebhookJobData = {
   traceId: string;
 };
 
-let redisConnection: IORedis | null = null;
-let queueSingleton: Queue<any, any, string> | null = null;
-let eventsSingleton: QueueEvents | null = null;
-
-function getRedisUrl() {
-  return (process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL || '').trim();
+export function isMongoQueueConfigured() {
+  return true;
 }
 
-export function isRedisConfigured() {
-  return Boolean(getRedisUrl());
-}
-
-export function getRedisConnection() {
-  const url = getRedisUrl();
-  if (!url) return null;
-  if (!redisConnection) {
-    redisConnection = new IORedis(url, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-      lazyConnect: true,
-    });
-  }
-  return redisConnection;
-}
-
-export function getInstagramWebhookQueue() {
-  const connection = getRedisConnection();
-  if (!connection) return null;
-  if (!queueSingleton) {
-    queueSingleton = new Queue<any, any, string>(INSTAGRAM_WEBHOOK_QUEUE, {
-      connection: connection as any,
-      defaultJobOptions: {
-        attempts: 5,
-        removeOnComplete: 500,
-        removeOnFail: 2000,
-        backoff: { type: 'exponential', delay: 1000 },
-      },
-    });
-  }
-  return queueSingleton;
-}
-
-export function getInstagramWebhookQueueEvents() {
-  const connection = getRedisConnection();
-  if (!connection) return null;
-  if (!eventsSingleton) {
-    eventsSingleton = new QueueEvents(INSTAGRAM_WEBHOOK_QUEUE, { connection: connection as any });
-  }
-  return eventsSingleton;
+function fingerprint(input: string) {
+  return crypto.createHash('sha1').update(String(input || '')).digest('hex').slice(0, 12);
 }
 
 export async function enqueueInstagramWebhookJob(data: InstagramWebhookJobData) {
-  const queue = getInstagramWebhookQueue();
-  if (!queue) {
-    return { queued: false, reason: 'redis_not_configured' as const };
+  await connectToDatabase();
+
+  const jobKey = data.eventKey;
+  const exists = await QueueJob.findOne({ queueName: INSTAGRAM_WEBHOOK_QUEUE, jobKey }).lean();
+  if (exists) {
+    return { queued: false, reason: 'duplicate' as const, jobId: String((exists as any)._id) };
   }
 
-  const job = await queue.add('process-event', data, {
-    jobId: data.eventKey,
+  const created = await QueueJob.create({
+    queueName: INSTAGRAM_WEBHOOK_QUEUE,
+    jobKey,
+    jobType: 'process-event',
+    status: 'pending',
+    retryCount: 0,
+    maxAttempts: Number(process.env.WEBHOOK_JOB_MAX_ATTEMPTS || 5),
+    availableAt: new Date(),
+    payload: {
+      ...data,
+      queueName: INSTAGRAM_WEBHOOK_QUEUE,
+      fingerprint: fingerprint(jobKey),
+    },
   });
 
-  return { queued: true, jobId: job.id };
+  return { queued: true, jobId: String(created._id), jobKey };
 }

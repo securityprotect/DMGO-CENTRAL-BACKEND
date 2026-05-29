@@ -5,7 +5,6 @@ import { SystemHealthLog } from '@/lib/models/SystemHealthLog';
 import { WebhookLog } from '@/lib/models/WebhookLog';
 import { QueueJob } from '@/lib/models/QueueJob';
 import { ErrorLog } from '@/lib/models/ErrorLog';
-import { getRedisConnection, isRedisConfigured } from '@/lib/queue/instagram';
 
 function statusFromHeartbeat(lastSeenAt?: Date | string | null, fallback = 'down') {
   if (!lastSeenAt) return fallback;
@@ -15,32 +14,24 @@ function statusFromHeartbeat(lastSeenAt?: Date | string | null, fallback = 'down
   return 'down';
 }
 
-async function pingRedis() {
-  if (!isRedisConfigured()) {
-    return { configured: false, status: 'down', latencyMs: 0 };
-  }
-
-  const connection = getRedisConnection();
-  if (!connection) {
-    return { configured: false, status: 'down', latencyMs: 0 };
-  }
-
-  const startedAt = Date.now();
-  try {
-    await connection.ping();
-    return { configured: true, status: 'healthy', latencyMs: Date.now() - startedAt };
-  } catch {
-    return { configured: true, status: 'down', latencyMs: Date.now() - startedAt };
-  }
-}
-
 export async function GET() {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
   await connectToDatabase();
-  const redis = await pingRedis();
-
+  await SystemHealthLog.updateOne(
+    { serviceName: 'dmgo-backend' },
+    {
+      $set: {
+        serviceName: 'dmgo-backend',
+        status: 'healthy',
+        responseTimeMs: 0,
+        lastIncident: '',
+        uptimePercent: 99.9,
+      },
+    },
+    { upsert: true }
+  );
   const [workerHeartbeat, backendHeartbeat, lastWebhook, pendingJobs, failedJobs, errorCount] = await Promise.all([
     SystemHealthLog.findOne({ serviceName: 'instagram-worker' }).sort({ createdAt: -1 }).lean(),
     SystemHealthLog.findOne({ serviceName: 'dmgo-backend' }).sort({ createdAt: -1 }).lean(),
@@ -56,9 +47,9 @@ export async function GET() {
 
   return NextResponse.json({
     overallStatus:
-      [backendStatus, workerStatus, redis.status, webhookStatus].includes('down')
+      [backendStatus, workerStatus, webhookStatus].includes('down')
         ? 'critical'
-        : [backendStatus, workerStatus, redis.status, webhookStatus].includes('degraded')
+        : [backendStatus, workerStatus, webhookStatus].includes('degraded')
           ? 'warning'
           : 'healthy',
     backend: {
@@ -71,7 +62,11 @@ export async function GET() {
       lastHeartbeatAt: workerHeartbeat ? new Date((workerHeartbeat as any).updatedAt).toISOString() : null,
       queue: 'instagram-webhook-events',
     },
-    redis,
+    queueStore: {
+      configured: true,
+      status: 'healthy',
+      backend: 'mongodb',
+    },
     webhook: {
       status: webhookStatus,
       lastReceivedAt: lastWebhook ? new Date((lastWebhook as any).createdAt).toISOString() : null,
@@ -83,10 +78,9 @@ export async function GET() {
     },
     services: [
       { name: 'Backend API', status: backendStatus, detail: 'Render web service' },
-      { name: 'Instagram Worker', status: workerStatus, detail: 'BullMQ consumer' },
-      { name: 'Redis Queue', status: redis.status, detail: redis.configured ? 'Connected' : 'Not configured' },
+      { name: 'Instagram Worker', status: workerStatus, detail: 'Mongo polling worker' },
+      { name: 'Mongo Queue', status: 'healthy', detail: 'Queue stored in MongoDB' },
       { name: 'Instagram Webhooks', status: webhookStatus, detail: 'Latest webhook intake' },
     ],
   });
 }
-

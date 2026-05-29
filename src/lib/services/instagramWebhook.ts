@@ -8,7 +8,7 @@ import { WebhookLog } from '@/lib/models/WebhookLog';
 import { WebhookEvent } from '@/lib/models/WebhookEvent';
 import { safeApiLog, safeErrorLog, safeQueueJob } from '@/lib/ops/logging';
 import { createLogger } from '@/lib/observability/logger';
-import { enqueueInstagramWebhookJob, isRedisConfigured } from '@/lib/queue/instagram';
+import { enqueueInstagramWebhookJob } from '@/lib/queue/instagram';
 
 export type InstagramWebhookChange = {
   field?: string;
@@ -97,6 +97,8 @@ export function extractInstagramWebhookEvents(body: InstagramWebhookBody): Norma
       const commentText = String(value.text || '').trim();
       const isEcho = Boolean((body as any)?.entry?.[0]?.messaging?.[0]?.message?.is_echo);
 
+      if (isEcho) continue;
+
       events.push({
         eventKey: buildEventKey({
           entryId,
@@ -183,12 +185,12 @@ export async function ingestInstagramWebhookBody(body: InstagramWebhookBody, hea
       { eventKey: event.eventKey },
       {
         $set: {
-          status: queueResult.queued ? 'queued' : 'received',
+          status: queueResult.queued ? 'queued' : 'duplicate',
           queueJobId: String((queueResult as any).jobId || ''),
           processingStartedAt: null,
           responsePayload: queueResult,
           processedAt: null,
-          lastError: queueResult.queued ? '' : 'queue_unavailable',
+          lastError: queueResult.queued ? '' : 'duplicate',
         },
       }
     );
@@ -204,7 +206,7 @@ export async function ingestInstagramWebhookBody(body: InstagramWebhookBody, hea
       mediaId: event.mediaId,
       traceId,
       status: 'received',
-      responseCode: queueResult.queued ? 202 : 503,
+      responseCode: queueResult.queued ? 202 : 200,
       processingTimeMs: Date.now() - startedAt,
       headers: Object.fromEntries(headers.entries()),
       rawPayload: body,
@@ -214,11 +216,7 @@ export async function ingestInstagramWebhookBody(body: InstagramWebhookBody, hea
       errorMessage: queueResult.queued ? '' : 'queue_unavailable',
     }).catch(() => null);
 
-    results.push({ eventKey: event.eventKey, status: queueResult.queued ? 'queued' : 'fallback' });
-
-    if (!queueResult.queued) {
-      logger.warn({ eventKey: event.eventKey }, 'redis unavailable, job not queued');
-    }
+    results.push({ eventKey: event.eventKey, status: queueResult.queued ? 'queued' : 'duplicate' });
   }
 
   return {
@@ -228,7 +226,7 @@ export async function ingestInstagramWebhookBody(body: InstagramWebhookBody, hea
     fallbackCount: results.filter((r) => r.status === 'fallback').length,
     results,
     durationMs: Date.now() - startedAt,
-    redisConfigured: isRedisConfigured(),
+    queueStore: 'mongodb',
   };
 }
 
