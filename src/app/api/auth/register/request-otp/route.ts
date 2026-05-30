@@ -11,6 +11,7 @@ export async function POST(req: Request) {
   const name = String(body?.name || '').trim();
   const email = String(body?.email || '').trim().toLowerCase();
   const password = String(body?.password || '');
+  const phone = String(body?.phone || '').trim();
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 });
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
 
   await connectToDatabase();
   const existing = await User.findOne({ email });
-  if (existing) return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
+  if (existing) return NextResponse.json({ error: 'Email already exists', code: 'email_exists' }, { status: 409 });
 
   const otp = generateOtpCode();
   const passwordHash = await bcrypt.hash(password, 10);
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
         otpHash: hashOtp(otp),
         expiresAt: otpExpiryDate(),
         attempts: 0,
-        payload: { name, email, passwordHash },
+        payload: { name, email, passwordHash, phone },
       },
     },
     { upsert: true, new: true }

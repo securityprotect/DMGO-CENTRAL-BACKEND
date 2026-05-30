@@ -31,6 +31,7 @@ export async function POST(req: Request) {
   const payload = pending.payload || {};
   const name = String(payload.name || '').trim();
   const passwordHash = String(payload.passwordHash || '');
+  const phone = String(payload.phone || '').trim();
   if (!name || !passwordHash) {
     await AuthOtp.deleteOne({ _id: pending._id });
     return NextResponse.json({ error: 'Invalid OTP payload. Please restart registration.' }, { status: 400 });
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
   }
 
-  const user = await User.create({ name, email, passwordHash });
+  const user = await User.create({ name, email, passwordHash, phone });
   await AuthOtp.deleteOne({ _id: pending._id });
 
   void sendWelcomeEmail(email, name);
