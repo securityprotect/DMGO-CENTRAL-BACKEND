@@ -51,6 +51,7 @@ export async function POST(req: Request) {
   try {
     // Pull payer contact (email + mobile) from Razorpay — best-effort.
     const payment = await fetchRazorpayPayment(paymentId);
+    console.log('[billing/verify] activating plan for user:', String(user._id), 'plan:', planId, 'cycle:', cycle);
     const result = await activatePaidPlan({
       userId: String(user._id),
       planId,
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
       customerContact: payment?.contact || '',
       customerName: user.name || '',
     });
+    console.log('[billing/verify] activation success:', result);
 
     return NextResponse.json({
       success: true,
@@ -73,7 +75,8 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Activation failed';
-    console.error('[billing/verify] activation error:', message);
+    const stack = error instanceof Error ? error.stack : '';
+    console.error('[billing/verify] activation error:', message, '\nStack:', stack);
     return NextResponse.json({ error: 'Payment captured but activation failed. Our team has been notified.' }, { status: 500 });
   }
 }
