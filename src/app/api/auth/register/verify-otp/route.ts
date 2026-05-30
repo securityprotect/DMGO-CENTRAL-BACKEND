@@ -51,6 +51,7 @@ export async function POST(req: Request) {
   const res = NextResponse.json({
     ok: true,
     user: { id: String(user._id), name: user.name, email: user.email, plan: user.plan },
+    token,
   });
   res.cookies.set(setAuthCookie(token));
   res.cookies.set(setProfileCookie({ name: user.name, email: user.email, plan: user.plan }));
