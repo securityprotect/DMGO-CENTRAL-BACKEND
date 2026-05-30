@@ -100,3 +100,56 @@ export async function sendWelcomeEmail(to: string, name: string) {
     `,
   });
 }
+
+export async function sendPaymentReceiptEmail(params: {
+  to: string;
+  name: string;
+  planName: string;
+  cycle: 'monthly' | 'annual';
+  amount: number; // whole rupees
+  currency: string;
+  paymentId: string;
+  paidAt: Date;
+  nextRenewal: Date;
+}) {
+  const { to, name, planName, cycle, amount, currency, paymentId, paidAt, nextRenewal } = params;
+  const symbol = currency === 'INR' ? '₹' : currency + ' ';
+  const amountStr = `${symbol}${amount.toLocaleString('en-IN')}`;
+  const dateStr = paidAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  const renewalStr = nextRenewal.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  const cycleLabel = cycle === 'annual' ? 'Annual' : 'Monthly';
+  const webUrl = (process.env.WEB_URL || 'https://dmgo.in').replace(/\/$/, '');
+
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:8px 0;color:#7d859f;font-size:13px;">${label}</td><td style="padding:8px 0;color:#171a2b;font-size:13px;font-weight:600;text-align:right;">${value}</td></tr>`;
+
+  return sendEmail({
+    to,
+    subject: `Payment received — DmGo ${planName} (${cycleLabel})`,
+    text:
+      `Hi ${name},\n\nWe've received your payment. Your DmGo ${planName} (${cycleLabel}) plan is now active.\n\n` +
+      `Amount paid: ${amountStr}\nPayment ID: ${paymentId}\nDate: ${dateStr}\nPlan renews / expires on: ${renewalStr}\n\n` +
+      `View your billing history: ${webUrl}/dashboard/billing\n\n- Team DmGo`,
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;background:#f6f7ff;padding:24px;">
+        <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e6e8f5;border-radius:14px;padding:24px;">
+          <div style="display:inline-block;padding:6px 12px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:999px;color:#047857;font-size:12px;font-weight:700;">Payment successful</div>
+          <h2 style="margin:14px 0 6px;color:#171a2b;">Thanks, ${name}</h2>
+          <p style="margin:0 0 18px;color:#4c5470;line-height:1.6;">Your <strong>DmGo ${planName}</strong> (${cycleLabel}) plan is now active. Here's your receipt.</p>
+          <table style="width:100%;border-collapse:collapse;margin:8px 0 4px;border-top:1px solid #eef0fa;border-bottom:1px solid #eef0fa;">
+            ${row('Plan', `${planName} · ${cycleLabel}`)}
+            ${row('Amount paid', amountStr)}
+            ${row('Payment ID', paymentId)}
+            ${row('Date', dateStr)}
+            ${row('Renews / expires', renewalStr)}
+          </table>
+          <a href="${webUrl}/dashboard/billing"
+             style="display:inline-block;margin-top:18px;padding:11px 18px;background:#6030F0;color:#ffffff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:600;">
+            View billing history
+          </a>
+          <p style="margin:22px 0 0;color:#7d859f;font-size:13px;">This is an automated receipt. Reply to this email if anything looks off.</p>
+        </div>
+      </div>
+    `,
+  });
+}

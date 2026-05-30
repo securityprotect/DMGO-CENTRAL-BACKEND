@@ -10,18 +10,37 @@ export async function GET() {
   await connectToDatabase();
 
   const rows = await BillingRecord.find({}).sort({ createdAt: -1 }).limit(300).lean();
+
+  // Join account email/name so admins can see who paid even if the gateway
+  // contact differs from the signup email.
+  const userIds = Array.from(new Set(rows.map((r: any) => String(r.userId))));
+  const users = await User.find({ _id: { $in: userIds } }).select('email name').lean();
+  const userMap = new Map(users.map((u: any) => [String(u._id), u]));
+
   return NextResponse.json({
-    records: rows.map((r: any) => ({
-      id: String(r._id),
-      userId: String(r.userId),
-      amount: r.amount,
-      currency: r.currency,
-      status: r.status,
-      type: r.type,
-      description: r.description,
-      providerRef: r.providerRef,
-      createdAt: new Date(r.createdAt).toISOString(),
-    })),
+    records: rows.map((r: any) => {
+      const u = userMap.get(String(r.userId));
+      return {
+        id: String(r._id),
+        userId: String(r.userId),
+        accountEmail: u?.email || '',
+        accountName: u?.name || '',
+        customerEmail: r.customerEmail || '',
+        customerContact: r.customerContact || '',
+        amount: r.amount,
+        currency: r.currency,
+        status: r.status,
+        type: r.type,
+        planId: r.planId || '',
+        billingCycle: r.billingCycle || '',
+        description: r.description,
+        providerRef: r.providerRef,
+        transactionId: r.transactionId || '',
+        paymentMethod: r.paymentMethod || '',
+        paidAt: r.paidAt ? new Date(r.paidAt).toISOString() : null,
+        createdAt: new Date(r.createdAt).toISOString(),
+      };
+    }),
   });
 }
 

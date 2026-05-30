@@ -55,8 +55,10 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' https://fonts.gstatic.com data:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "script-src 'self' 'unsafe-inline' https://static.rocket.new",
-              "connect-src 'self' https://static.rocket.new https://appanalytics.rocket.new",
+              process.env.NODE_ENV === 'production'
+                ? "script-src 'self' 'unsafe-inline'"
+                : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "connect-src 'self'",
               "upgrade-insecure-requests",
             ].join('; '),
           },
@@ -93,13 +95,6 @@ const nextConfig = {
       '@': path.resolve(process.cwd(), 'src'),
     };
 
-    config.module.rules.push({
-      test: /\.(jsx|tsx)$/,
-      exclude: [/node_modules/],
-      use: [{
-        loader: '@dhiwise/component-tagger/nextLoader',
-      }],
-    });
     if (dev) {
       const ignoredPaths = (process.env.WATCH_IGNORED_PATHS || '')
         .split(',')

@@ -16,6 +16,12 @@ const billingRecordSchema = new Schema(
     paidAt: { type: Date, default: null },
     renewalDate: { type: Date, default: null },
     refundStatus: { type: String, default: '' },
+    // Payer contact captured at checkout (from Razorpay payment entity).
+    customerEmail: { type: String, default: '' },
+    customerContact: { type: String, default: '' },
+    customerName: { type: String, default: '' },
+    planId: { type: String, default: '' },
+    billingCycle: { type: String, default: '' },
   },
   { timestamps: true }
 );
