@@ -25,6 +25,14 @@ function authCookieSecure() {
   return process.env.NODE_ENV === 'production' || authCookieSameSite() === 'none';
 }
 
+function authCookieDomain(): string | undefined {
+  // In production, set domain to parent domain so cookie works across subdomains
+  // e.g., ".dmgo.in" allows cookie on www.dmgo.in, backend-prod.dmgo.in, etc.
+  const configured = process.env.AUTH_COOKIE_DOMAIN;
+  if (configured) return configured;
+  return undefined;
+}
+
 export function encodeProfileCookie(profile: AuthTokenProfile) {
   return Buffer.from(JSON.stringify({
     name: profile.name || '',
@@ -105,6 +113,7 @@ export async function getAuthedUser() {
 }
 
 export function setAuthCookie(token: string) {
+  const domain = authCookieDomain();
   return {
     name: COOKIE_NAME,
     value: token,
@@ -113,10 +122,12 @@ export function setAuthCookie(token: string) {
     sameSite: authCookieSameSite(),
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
+    ...(domain && { domain }),
   };
 }
 
 export function setProfileCookie(profile: AuthTokenProfile) {
+  const domain = authCookieDomain();
   return {
     name: PROFILE_COOKIE_NAME,
     value: encodeProfileCookie(profile),
@@ -125,10 +136,12 @@ export function setProfileCookie(profile: AuthTokenProfile) {
     sameSite: authCookieSameSite(),
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
+    ...(domain && { domain }),
   };
 }
 
 export function clearAuthCookie() {
+  const domain = authCookieDomain();
   return {
     name: COOKIE_NAME,
     value: '',
@@ -137,10 +150,12 @@ export function clearAuthCookie() {
     sameSite: authCookieSameSite(),
     path: '/',
     maxAge: 0,
+    ...(domain && { domain }),
   };
 }
 
 export function clearProfileCookie() {
+  const domain = authCookieDomain();
   return {
     name: PROFILE_COOKIE_NAME,
     value: '',
@@ -149,5 +164,6 @@ export function clearProfileCookie() {
     sameSite: authCookieSameSite(),
     path: '/',
     maxAge: 0,
+    ...(domain && { domain }),
   };
 }
