@@ -3,6 +3,7 @@ import { getAuthedUser } from '@/lib/auth/session';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Automation } from '@/lib/models/Automation';
 import { InstagramAccount } from '@/lib/models/InstagramAccount';
+import { getPlanLimits, isUnlimited } from '@/lib/billing/planLimits';
 
 export async function GET() {
   const user = await getAuthedUser();
@@ -41,6 +42,26 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   await connectToDatabase();
+
+  // Active-automation cap. New automations are created active, so a create
+  // counts against the limit. Grandfathered: existing automations are never
+  // touched — we only block adding beyond the cap.
+  const plan = (user.plan as string) || 'starter';
+  const automationLimit = getPlanLimits(plan).maxActiveAutomations;
+  if (!isUnlimited(automationLimit)) {
+    const activeCount = await Automation.countDocuments({ userId: user._id, status: 'active' });
+    if (activeCount >= automationLimit) {
+      return NextResponse.json(
+        {
+          error: `Your ${plan} plan allows ${automationLimit} active automations. Upgrade for unlimited automations.`,
+          code: 'automation_limit',
+          limit: automationLimit,
+          plan,
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   const selectedAccountId = String(body.instagramAccountId || '').trim();
   let account = null;

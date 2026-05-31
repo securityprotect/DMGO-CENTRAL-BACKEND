@@ -3,7 +3,11 @@ import { getAuthedUser } from '@/lib/auth/session';
 import { connectToDatabase } from '@/lib/mongodb';
 import { BillingRecord } from '@/lib/models/BillingRecord';
 import { Subscription } from '@/lib/models/Subscription';
+import { InstagramAccount } from '@/lib/models/InstagramAccount';
+import { Automation } from '@/lib/models/Automation';
 import { PLANS } from '@/lib/billing/plans';
+import { getPlanLimits } from '@/lib/billing/planLimits';
+import { getDmUsage } from '@/lib/billing/usage';
 
 export async function GET() {
   const user = await getAuthedUser();
@@ -13,15 +17,33 @@ export async function GET() {
 
   await connectToDatabase();
 
-  const [records, subscription] = await Promise.all([
+  const plan = (user.plan as string) || 'starter';
+  const limits = getPlanLimits(plan);
+
+  const [records, subscription, accountsUsed, automationsUsed, dms] = await Promise.all([
     BillingRecord.find({ userId: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
     Subscription.findOne({ userId: user._id }).lean(),
+    InstagramAccount.countDocuments({ userId: user._id }),
+    Automation.countDocuments({ userId: user._id, status: 'active' }),
+    getDmUsage(String(user._id)),
   ]);
 
   return NextResponse.json({
     currentPlan: {
-      id: user.plan || 'starter',
-      name: PLANS[user.plan as string]?.name || 'Starter',
+      id: plan,
+      name: PLANS[plan]?.name || 'Starter',
+    },
+    usage: {
+      accounts: { used: accountsUsed, limit: limits.maxAccounts },
+      automations: { used: automationsUsed, limit: limits.maxActiveAutomations },
+      dms: {
+        used: dms.used,
+        limit: dms.limit,
+        percent: dms.percent,
+        overLimit: dms.overLimit,
+        graceRemaining: dms.graceRemaining,
+        unlimited: dms.unlimited,
+      },
     },
     subscription: subscription
       ? {

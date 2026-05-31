@@ -8,6 +8,8 @@ import {
   subscribeInstagramAccountToWebhooks,
 } from '@/lib/services/instagram';
 import { setAuthCookie, signAuthToken } from '@/lib/auth/session';
+import { getPlanLimits } from '@/lib/billing/planLimits';
+import { User } from '@/lib/models/User';
 
 export async function GET(req: Request) {
   const webUrl = (process.env.WEB_URL || 'http://localhost:4028').trim();
@@ -26,6 +28,25 @@ export async function GET(req: Request) {
     const profile = await fetchInstagramProfile(accessToken);
 
     await connectToDatabase();
+
+    // Account-cap guard (defense in depth — connect-url checks too, but the
+    // OAuth URL could be hit directly). Only blocks NET-NEW accounts: if this
+    // igUserId already exists for the user it's a reconnect and always allowed.
+    const existingAccount = await InstagramAccount.findOne({ igUserId: String(profile.id) }).select('_id').lean();
+    if (!existingAccount) {
+      const owner = await User.findById(userId).select('plan').lean();
+      const plan = (owner?.plan as string) || 'starter';
+      const limit = getPlanLimits(plan).maxAccounts;
+      const count = await InstagramAccount.countDocuments({ userId });
+      if (count >= limit) {
+        return NextResponse.redirect(
+          `${webUrl}/dashboard?connected=0&error=${encodeURIComponent(
+            `Your ${plan} plan allows ${limit} Instagram account${limit > 1 ? 's' : ''}. Upgrade to connect more.`
+          )}`
+        );
+      }
+    }
+
     await InstagramAccount.findOneAndUpdate(
       { igUserId: String(profile.id) },
       {

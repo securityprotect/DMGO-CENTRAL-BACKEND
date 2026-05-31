@@ -8,6 +8,7 @@ import { WebhookLog } from '@/lib/models/WebhookLog';
 import { safeApiLog, safeErrorLog, safeQueueJob } from '@/lib/ops/logging';
 import { createLogger } from '@/lib/observability/logger';
 import { interpolateTemplate, normalizeInstagramHandle, resolveInstagramAccount } from '@/lib/services/instagramWebhook';
+import { tryConsumeDm } from '@/lib/billing/usage';
 
 type EventDoc = {
   eventKey: string;
@@ -134,9 +135,19 @@ export async function processInstagramWebhookEvent(eventKey: string, traceId = '
         await replyToComment(String(account.accessToken), event.commentId, commentReplyText);
       }
       if (automation.sendDm && commenterId && dmText) {
-        await sendPrivateReplyToComment(String(account.accessToken), String(account.igUserId), event.commentId, dmText);
+        // Monthly DM cap (with trusted-customer grace buffer). The public
+        // comment reply above always goes out; only the DM is metered.
+        const quota = await tryConsumeDm(String(account.userId));
+        if (!quota.allowed) {
+          status = 'failed';
+          failReason = 'Monthly DM limit reached — upgrade your plan to resume DMs';
+        } else {
+          await sendPrivateReplyToComment(String(account.accessToken), String(account.igUserId), event.commentId, dmText);
+          status = 'sent';
+        }
+      } else {
+        status = 'sent';
       }
-      status = 'sent';
     } catch (error) {
       failReason = error instanceof Error ? error.message : 'Unknown delivery error';
       await safeErrorLog({

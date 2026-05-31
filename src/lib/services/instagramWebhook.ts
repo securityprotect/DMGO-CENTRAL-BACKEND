@@ -9,6 +9,7 @@ import { WebhookEvent } from '@/lib/models/WebhookEvent';
 import { safeApiLog, safeErrorLog, safeQueueJob } from '@/lib/ops/logging';
 import { createLogger } from '@/lib/observability/logger';
 import { enqueueInstagramWebhookJob } from '@/lib/queue/instagram';
+import { tryConsumeDm } from '@/lib/billing/usage';
 
 export type InstagramWebhookChange = {
   field?: string;
@@ -477,20 +478,39 @@ export async function processInstagramWebhookBody(body: InstagramWebhookBody, ra
           }
 
           if (automation.sendDm && senderId && dmText) {
-            const apiStartedAt = Date.now();
-            await sendPrivateReplyToComment(String(account.accessToken), String(account.igUserId), commentId, dmText);
-            await safeApiLog({
-              userId: account.userId,
-              service: 'Instagram API',
-              method: 'POST',
-              endpoint: 'messages',
-              statusCode: 200,
-              durationMs: Date.now() - apiStartedAt,
-              requestPayload: { commentId, message: dmText, eventKey, traceId },
-            });
+            // Monthly DM cap (with trusted-customer grace buffer). The public
+            // comment reply above still goes out; only the DM is metered.
+            const quota = await tryConsumeDm(String(account.userId));
+            if (!quota.allowed) {
+              status = 'rate-limited';
+              failReason = 'Monthly DM limit reached — upgrade your plan to resume DMs';
+              await safeApiLog({
+                userId: account.userId,
+                service: 'Instagram API',
+                method: 'POST',
+                endpoint: 'messages',
+                statusCode: 429,
+                durationMs: 0,
+                requestPayload: { commentId, message: dmText, eventKey, traceId },
+                errorMessage: failReason,
+              });
+            } else {
+              const apiStartedAt = Date.now();
+              await sendPrivateReplyToComment(String(account.accessToken), String(account.igUserId), commentId, dmText);
+              await safeApiLog({
+                userId: account.userId,
+                service: 'Instagram API',
+                method: 'POST',
+                endpoint: 'messages',
+                statusCode: 200,
+                durationMs: Date.now() - apiStartedAt,
+                requestPayload: { commentId, message: dmText, eventKey, traceId },
+              });
+              status = 'sent';
+            }
+          } else {
+            status = 'sent';
           }
-
-          status = 'sent';
         } catch (error) {
           status = 'failed';
           failReason = error instanceof Error ? error.message : 'Unknown delivery error';
@@ -552,7 +572,7 @@ export async function processInstagramWebhookBody(body: InstagramWebhookBody, ra
             { label: 'Trigger Received', status: 'ok' },
             { label: 'Keyword Matched', status: 'ok', detail: matchedKeyword },
             { label: 'Comment Reply', status: commentReplyText ? (status === 'sent' ? 'ok' : 'failed') : 'skipped' },
-            { label: 'DM Sent', status: automation.sendDm ? (status === 'sent' ? 'ok' : 'failed') : 'skipped' },
+            { label: 'DM Sent', status: automation.sendDm ? (status === 'sent' ? 'ok' : 'failed') : 'skipped', detail: status === 'rate-limited' ? failReason : undefined },
             { label: 'Success / Failed', status },
           ],
           executionDurationMs: Date.now() - startedAt,
