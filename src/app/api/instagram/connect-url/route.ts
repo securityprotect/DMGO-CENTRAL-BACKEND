@@ -3,7 +3,7 @@ import { getAuthedUser } from '@/lib/auth/session';
 import { buildInstagramState, getInstagramOAuthUrl } from '@/lib/services/instagram';
 import { connectToDatabase } from '@/lib/mongodb';
 import { InstagramAccount } from '@/lib/models/InstagramAccount';
-import { getPlanLimits } from '@/lib/billing/planLimits';
+import { getPlanLimits, isUnlimited } from '@/lib/billing/planLimits';
 
 export async function GET() {
   const user = await getAuthedUser();
@@ -15,17 +15,19 @@ export async function GET() {
   await connectToDatabase();
   const plan = (user.plan as string) || 'starter';
   const limit = getPlanLimits(plan).maxAccounts;
-  const count = await InstagramAccount.countDocuments({ userId: user._id });
-  if (count >= limit) {
-    return NextResponse.json(
-      {
-        error: `Your ${plan} plan allows ${limit} Instagram account${limit > 1 ? 's' : ''}. Upgrade to connect more.`,
-        code: 'account_limit',
-        limit,
-        plan,
-      },
-      { status: 403 }
-    );
+  if (!isUnlimited(limit)) {
+    const count = await InstagramAccount.countDocuments({ userId: user._id });
+    if (count >= limit) {
+      return NextResponse.json(
+        {
+          error: `Your ${plan} plan allows ${limit} Instagram account${limit > 1 ? 's' : ''}. Upgrade to connect more.`,
+          code: 'account_limit',
+          limit,
+          plan,
+        },
+        { status: 403 }
+      );
+    }
   }
 
   const state = buildInstagramState(String(user._id));

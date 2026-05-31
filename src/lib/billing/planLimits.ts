@@ -21,7 +21,7 @@ export const DM_GRACE_BUFFER = 100;
 export const PLAN_LIMITS: Record<string, PlanLimits> = {
   starter: { maxAccounts: 1, maxActiveAutomations: 3, monthlyDms: 500 },
   growth: { maxAccounts: 3, maxActiveAutomations: UNLIMITED, monthlyDms: 10_000 },
-  agency: { maxAccounts: 20, maxActiveAutomations: UNLIMITED, monthlyDms: 100_000 },
+  agency: { maxAccounts: UNLIMITED, maxActiveAutomations: UNLIMITED, monthlyDms: 100_000 },
 };
 
 export function getPlanLimits(plan?: string): PlanLimits {
