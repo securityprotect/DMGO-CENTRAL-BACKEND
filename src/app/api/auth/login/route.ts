@@ -65,16 +65,20 @@ export async function POST(req: Request) {
   user.lastDevice = req.headers.get('user-agent') || '';
   user.lastActivityAt = new Date();
   user.loginFailures24h = 0;
-  await user.save();
-  await LoginSession.create({
-    userId: user._id,
-    adminUserId: user.role === 'admin' ? user._id : null,
-    ipAddress: user.lastLoginIp,
-    browser: req.headers.get('user-agent') || '',
-    device: req.headers.get('sec-ch-ua-platform') || '',
-    active: true,
-    lastSeenAt: new Date(),
-  }).catch((error) => console.error('[LOGIN_SESSION] create failed', error));
+
+  // Run database operations in parallel for better performance
+  await Promise.all([
+    user.save(),
+    LoginSession.create({
+      userId: user._id,
+      adminUserId: user.role === 'admin' ? user._id : null,
+      ipAddress: user.lastLoginIp,
+      browser: req.headers.get('user-agent') || '',
+      device: req.headers.get('sec-ch-ua-platform') || '',
+      active: true,
+      lastSeenAt: new Date(),
+    }).catch((error) => console.error('[LOGIN_SESSION] create failed', error))
+  ]);
 
   const token = signAuthToken(String(user._id), { name: user.name, email: user.email, plan: user.plan });
   const safeNextPath = nextPath.startsWith('/') ? nextPath : '/dashboard';
